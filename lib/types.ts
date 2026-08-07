@@ -1,4 +1,4 @@
-export type Drill = { id: string; name: string; description: string; maxHits: number; distance?: string; notes?: string; googleSheetUrl?: string; favorite: boolean; active: boolean; createdAt: string; updatedAt: string };
+export type Drill = { id: string; name: string; description: string; maxHits: number; distance?: string; notes?: string; googleSheetUrl?: string; libraryVisible?: boolean; favorite: boolean; active: boolean; createdAt: string; updatedAt: string };
 export type Standard = { id: string; name: string; maxTime: number; description?: string; order: number };
 export type CourseEntry = { id: string; drillId: string; order: number; standards: Standard[]; notes?: string };
 export type Course = { id: string; name: string; description: string; notes?: string; googleSheetUrl?: string; entries: CourseEntry[]; favorite: boolean; active: boolean; createdAt: string; updatedAt: string };

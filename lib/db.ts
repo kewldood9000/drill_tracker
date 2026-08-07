@@ -4,10 +4,10 @@ class DrillTrackerDB extends Dexie { drills!: EntityTable<Drill,"id">; courses!:
 export const db = new DrillTrackerDB();
 const now = () => new Date().toISOString(); const id=(v:string)=>`seed-${v}`;
 const drills: Drill[] = [
-  {id:id("draw"),name:"Draw to First Shot",description:"Draw from holster and fire one accurate first shot.",maxHits:1,distance:"7 yd",favorite:true,active:true,createdAt:now(),updatedAt:now()},
-  {id:id("bill"),name:"Bill Drill",description:"From low ready, fire six rounds into the target as quickly as possible while maintaining acceptable hits.",maxHits:6,distance:"7 yd",favorite:true,active:true,createdAt:now(),updatedAt:now()},
-  {id:id("failure"),name:"Failure Drill",description:"Two shots to the body followed by one precise head shot.",maxHits:3,distance:"7 yd",favorite:false,active:true,createdAt:now(),updatedAt:now()},
-  {id:id("elpres"),name:"El Presidente",description:"Turn, draw, engage three targets, reload, and re-engage.",maxHits:12,distance:"10 yd",favorite:false,active:true,createdAt:now(),updatedAt:now()},
+  {id:id("draw"),name:"Draw to First Shot",description:"Draw from holster and fire one accurate first shot.",maxHits:1,distance:"7 yd",libraryVisible:true,favorite:true,active:true,createdAt:now(),updatedAt:now()},
+  {id:id("bill"),name:"Bill Drill",description:"From low ready, fire six rounds into the target as quickly as possible while maintaining acceptable hits.",maxHits:6,distance:"7 yd",libraryVisible:true,favorite:true,active:true,createdAt:now(),updatedAt:now()},
+  {id:id("failure"),name:"Failure Drill",description:"Two shots to the body followed by one precise head shot.",maxHits:3,distance:"7 yd",libraryVisible:true,favorite:false,active:true,createdAt:now(),updatedAt:now()},
+  {id:id("elpres"),name:"El Presidente",description:"Turn, draw, engage three targets, reload, and re-engage.",maxHits:12,distance:"10 yd",libraryVisible:true,favorite:false,active:true,createdAt:now(),updatedAt:now()},
 ];
 const s=(name:string,maxTime:number,order:number)=>({id:id(`${name}-${maxTime}`),name,maxTime,order});
 const course: Course = {id:id("monthly"),name:"Monthly Qualification",description:"A reusable pistol performance assessment.",favorite:true,active:true,createdAt:now(),updatedAt:now(),entries:[{id:id("e1"),drillId:id("draw"),order:0,standards:[s("Expert",1.2,0),s("Advanced",1.6,1),s("Intermediate",2,2)]},{id:id("e2"),drillId:id("bill"),order:1,standards:[s("Expert",2,0),s("Advanced",2.5,1),s("Intermediate",3,2),s("Beginner",4,3)]},{id:id("e3"),drillId:id("failure"),order:2,standards:[s("Advanced",2.5,0),s("Intermediate",3.25,1)]},{id:id("e4"),drillId:id("elpres"),order:3,standards:[s("Advanced",8,0),s("Intermediate",10,1)]}]};
