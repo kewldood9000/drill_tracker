@@ -1,0 +1,4 @@
+import assert from "node:assert/strict";
+const score={alpha:5,charlie:3,delta:1,miss:-10};
+const alpha=(max,c,d,m)=>Math.max(0,max-c-d-m); const valid=(max,c,d,m)=>[max,c,d,m].every(Number.isInteger)&&max>0&&c>=0&&d>=0&&m>=0&&c+d+m<=max; const points=(a,c,d,m)=>a*score.alpha+c*score.charlie+d*score.delta+m*score.miss; const hf=(p,t)=>Number.isFinite(t)&&t>0?p/t:null; const standard=(t,all)=>all.filter(s=>t<=s.maxTime).sort((a,b)=>a.maxTime-b.maxTime||a.order-b.order)[0]??null;
+assert.equal(alpha(6,0,0,0),6);assert.equal(alpha(6,1,0,0),5);assert.equal(alpha(6,1,1,1),3);assert.equal(valid(6,4,2,1),false);assert.equal(points(5,1,0,0),28);assert.equal(hf(28,2.8),10);assert.equal(hf(28,0),null);const standards=[{name:"Expert",maxTime:2,order:0},{name:"Advanced",maxTime:2.5,order:1},{name:"Intermediate",maxTime:3,order:2}];assert.equal(standard(2.34,standards)?.name,"Advanced");assert.equal(standard(3.5,standards),null);console.log("Scoring tests passed");
