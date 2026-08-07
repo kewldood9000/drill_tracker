@@ -72,13 +72,18 @@ async function ensureHeaders(connection: GoogleSheetsConnection) {
   await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A1:L1")}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [headers] }) });
 }
 
-export async function connectGoogleSheet(spreadsheetUrl: string) {
+async function prepareGoogleSheet(spreadsheetUrl: string) {
   const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-  await requestGoogleToken("consent");
   const sheetName = await ensureTrackerTab(spreadsheetId);
   const now = new Date().toISOString();
   const connection: GoogleSheetsConnection = { spreadsheetId, spreadsheetUrl: spreadsheetUrl.trim(), sheetName, connectedEmail: await signedInEmail(), createdAt: now, updatedAt: now };
   await ensureHeaders(connection);
+  return connection;
+}
+
+export async function connectGoogleSheet(spreadsheetUrl: string) {
+  await requestGoogleToken("consent");
+  const connection = await prepareGoogleSheet(spreadsheetUrl);
   await saveGoogleSheetsConnection(connection);
   return connection;
 }
@@ -91,14 +96,20 @@ export async function restoreGoogleSession() {
 const runRow = (run: Run) => [new Date(run.timestamp).toLocaleString(), run.time, run.drillNameAtTime, run.courseNameAtTime || "", run.alpha, run.charlie, run.delta, run.miss, run.points, run.hitFactor, run.achievedStandardName || "", run.id];
 
 export async function syncGoogleSheets() {
-  const connection = await getGoogleSheetsConnection();
-  if (!connection) return { status: "not-connected" as const, count: 0 };
+  const defaultConnection = await getGoogleSheetsConnection();
+  if (!defaultConnection) return { status: "not-connected" as const, count: 0 };
   if (!accessToken) return { status: "needs-sign-in" as const, count: 0 };
   const pending = await db.runs.filter(run => run.syncStatus !== "synced").toArray();
   if (!pending.length) return { status: "up-to-date" as const, count: 0 };
-  await ensureHeaders(connection);
-  await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A:L")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: pending.map(runRow) }) });
-  const syncedAt = new Date().toISOString();
-  await db.runs.bulkPut(pending.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt })));
-  return { status: "synced" as const, count: pending.length };
+  const [drills, courses] = await Promise.all([db.drills.toArray(), db.courses.toArray()]);
+  const drillById = new Map(drills.map(drill => [drill.id, drill])); const courseById = new Map(courses.map(course => [course.id, course]));
+  const groups = new Map<string, Run[]>();
+  for (const run of pending) { const course = run.courseId ? courseById.get(run.courseId) : undefined; const drill = drillById.get(run.drillId); const destination = course?.googleSheetUrl?.trim() || drill?.googleSheetUrl?.trim() || defaultConnection.spreadsheetUrl; groups.set(destination, [...(groups.get(destination) || []), run]); }
+  let count = 0;
+  for (const [destination, runs] of groups) {
+    const connection = destination === defaultConnection.spreadsheetUrl ? defaultConnection : await prepareGoogleSheet(destination);
+    await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A:L")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: runs.map(runRow) }) });
+    const syncedAt = new Date().toISOString(); await db.runs.bulkPut(runs.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt }))); count += runs.length;
+  }
+  return { status: "synced" as const, count };
 }

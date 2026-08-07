@@ -25,7 +25,7 @@ The UI only calls the database module, leaving room for a future syncing reposit
 
 ## Google Sheets connection
 
-The **More → Data & Settings** screen includes a Google Sheets connection. After a person signs in with Google and pastes a Sheet share link they can edit, the app creates a `Drill Tracker` tab, adds column headings, and automatically sends newly recorded runs when the app is online. Runs remain stored locally first and are retried on the next available app session if a connection fails.
+The **More → Data & Settings** screen includes a Google Sheets connection. After a person signs in with Google and pastes a Sheet share link they can edit, the app creates a `Drill Tracker` tab, adds column headings, and automatically sends newly recorded runs when the app is online. Runs remain stored locally first and are retried on the next available app session if a connection fails. A drill or course can also have its own optional Sheet link in **Manage**. A course Sheet takes priority, then a drill Sheet, then the default Sheet from Settings.
 
 Before this can be enabled, create a Google OAuth **Web application** client in Google Cloud and add the exact GitHub Pages origin to its Authorized JavaScript origins (for example, `https://USERNAME.github.io`). Set its public client ID as `VITE_GOOGLE_CLIENT_ID`. For local development, copy `.env.example` to `.env.local` and set the value there. Do not create or commit a client secret; browser apps use the public client ID only.
 
