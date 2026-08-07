@@ -28,7 +28,12 @@ export default function Home() {
     setDrills(d); setCourses(c); setRuns(r);
   };
   useEffect(() => { ensureSeed().then(refresh); navigator.storage?.persist?.(); }, []);
-  useEffect(() => { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined); }, []);
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      const base = import.meta.env.BASE_URL;
+      navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch(() => undefined);
+    }
+  }, []);
   const goScore = (drill: Drill, c?: Course, entry?: CourseEntry) => { setScoreContext({ drill, course: c, entry }); setScreen("score"); };
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2600); };
   const nav = (next: Screen) => { setScreen(next); setCourse(null); };
