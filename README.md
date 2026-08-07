@@ -23,6 +23,14 @@ pnpm test
 
 The UI only calls the database module, leaving room for a future syncing repository without rewriting scoring or screens.
 
+## Google Sheets connection
+
+The **More → Data & Settings** screen includes a Google Sheets connection. After a person signs in with Google and pastes a Sheet share link they can edit, the app creates a `Drill Tracker` tab, adds column headings, and automatically sends newly recorded runs when the app is online. Runs remain stored locally first and are retried on the next available app session if a connection fails.
+
+Before this can be enabled, create a Google OAuth **Web application** client in Google Cloud and add the exact GitHub Pages origin to its Authorized JavaScript origins (for example, `https://USERNAME.github.io`). Set its public client ID as `VITE_GOOGLE_CLIENT_ID`. For local development, copy `.env.example` to `.env.local` and set the value there. Do not create or commit a client secret; browser apps use the public client ID only.
+
+For GitHub Pages, add an Actions repository variable named `VITE_GOOGLE_CLIENT_ID`, then the workflow will include it in the production build. The app requests Google Sheets and email permission only after the user taps Sign in.
+
 ## GitHub Pages deployment
 
 The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml`. On every push to `main`, it installs dependencies, runs the scoring tests, creates a static Vite build, and deploys `dist` to GitHub Pages.
