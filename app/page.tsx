@@ -7,6 +7,7 @@ import { calculateAlpha, calculateHitFactor, calculatePoints, determineStandard,
 import type { Course, CourseEntry, Drill, GoogleSheetsConnection, PassCriteria, Run, Standard } from "@/lib/types";
 
 type Screen = "range" | "quick" | "history" | "manage" | "course" | "score" | "data";
+type RangeScreen = "range" | "course" | "score";
 type ScoreContext = { drill: Drill; course?: Course; entry?: CourseEntry };
 const uid = () => crypto.randomUUID();
 const date = () => new Date().toISOString();
@@ -14,6 +15,7 @@ const fmt = (n: number | null, decimals = 3) => n === null || !Number.isFinite(n
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("range");
+  const [rangeReturn, setRangeReturn] = useState<RangeScreen>("range");
   const [drills, setDrills] = useState<Drill[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -39,7 +41,7 @@ export default function Home() {
   useEffect(() => { const syncWhenOnline = () => { void syncGoogleSheets().catch(() => undefined); }; window.addEventListener("online", syncWhenOnline); return () => window.removeEventListener("online", syncWhenOnline); }, []);
   const goScore = (drill: Drill, c?: Course, entry?: CourseEntry) => { setScoreContext({ drill, course: c, entry }); setScreen("score"); };
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2600); };
-  const nav = (next: Screen) => { setScreen(next); setCourse(null); };
+  const nav = (next: Screen) => { const inRange = (value: Screen): value is RangeScreen => value === "range" || value === "course" || value === "score"; if (next === "range") { if (inRange(screen)) { setScreen("range"); setCourse(null); setScoreContext(null); } else setScreen(rangeReturn); return; } if (inRange(screen)) setRangeReturn(screen); setScreen(next); };
 
   return <main className="app-shell">
     <aside className="sidebar"><Brand /><Nav screen={screen} onGo={nav} /></aside>
@@ -63,7 +65,7 @@ export default function Home() {
 function Brand() { return <div className="brand"><span className="brand-mark">O</span><span><b>DRILL</b><em>TRACKER</em></span></div>; }
 function Nav({ screen, onGo }: { screen: Screen; onGo: (s: Screen) => void }) {
   const links: [Screen, string, string][] = [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["manage", "=", "Manage"], ["data", "*", "More"]];
-  return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i>{icon}</i>{label}</button>)}</>;
+  return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key || key === "range" && (screen === "course" || screen === "score") ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i>{icon}</i>{label}</button>)}</>;
 }
 
 function Range({ drills, courses, runs, query, setQuery, onDrill, onCourse }: { drills: Drill[]; courses: Course[]; runs: Run[]; query: string; setQuery: (v: string) => void; onDrill: (d: Drill) => void; onCourse: (c: Course) => void }) {
