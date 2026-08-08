@@ -4,7 +4,15 @@ export const calculateAlpha = (maxHits: number, charlie: number, delta: number, 
 export const validHitCounts = (maxHits: number, charlie: number, delta: number, miss: number) => [maxHits,charlie,delta,miss].every(Number.isInteger) && maxHits > 0 && charlie >= 0 && delta >= 0 && miss >= 0 && charlie + delta + miss <= maxHits;
 export const calculatePoints = (alpha:number, charlie:number, delta:number, miss:number) => alpha*SCORE_VALUES.alpha + charlie*SCORE_VALUES.charlie + delta*SCORE_VALUES.delta + miss*SCORE_VALUES.miss;
 export const calculateHitFactor = (points: number, time: number) => Number.isFinite(time) && time > 0 ? points / time : null;
-export const determineTimeStandard = (time: number, standards: Standard[]) => { if (!Number.isFinite(time) || time <= 0) return null; return standards.filter(s => Number.isFinite(s.maxTime) && s.maxTime > 0 && time <= s.maxTime).sort((a,b) => a.maxTime - b.maxTime || a.order - b.order)[0] ?? null; };
+export const standardMetric = (standard: Standard) => standard.metric ?? "time";
+export const determineStandard = (time: number, hitFactor: number | null, standards: Standard[]) => standards.filter(standard => {
+  if (!Number.isFinite(standard.maxTime) || standard.maxTime <= 0) return false;
+  return standardMetric(standard) === "hitFactor" ? hitFactor !== null && hitFactor >= standard.maxTime : Number.isFinite(time) && time > 0 && time <= standard.maxTime;
+}).sort((a, b) => {
+  const aMetric = standardMetric(a); const bMetric = standardMetric(b);
+  if (aMetric !== bMetric) return a.order - b.order;
+  return aMetric === "hitFactor" ? b.maxTime - a.maxTime || a.order - b.order : a.maxTime - b.maxTime || a.order - b.order;
+})[0] ?? null;
 export const hasPassCriteria = (criteria?: PassCriteria) => Boolean(criteria?.requireAllAlpha || criteria?.maxNonAlpha !== undefined || criteria?.maxTime || criteria?.minPoints || criteria?.minHitFactor);
 export const evaluatePassCriteria = (criteria: PassCriteria | undefined, score: { time: number; alpha: number; charlie: number; delta: number; miss: number; points: number; hitFactor: number | null }) => {
   if (!hasPassCriteria(criteria)) return null;
