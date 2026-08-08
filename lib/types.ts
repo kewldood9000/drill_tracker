@@ -1,4 +1,4 @@
-export type PassCriteria = { requireAllAlpha?: boolean; maxTime?: number; minPoints?: number; minHitFactor?: number };
+export type PassCriteria = { requireAllAlpha?: boolean; maxNonAlpha?: number; maxTime?: number; minPoints?: number; minHitFactor?: number };
 export type GoogleSheetField = "recordedAt" | "time" | "drill" | "course" | "alpha" | "charlie" | "delta" | "miss" | "points" | "hitFactor" | "standard" | "result" | "runId";
 export type GoogleSheetMapping = { sheetName: string; columns: Partial<Record<GoogleSheetField, string>> };
 export type Drill = { id: string; name: string; description: string; maxHits: number; distance?: string; notes?: string; googleSheetUrl?: string; googleSheetMapping?: GoogleSheetMapping; libraryVisible?: boolean; passCriteria?: PassCriteria; favorite: boolean; active: boolean; createdAt: string; updatedAt: string };
