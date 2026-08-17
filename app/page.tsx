@@ -148,9 +148,8 @@ function CourseEditor({ course, drills, onClose, onSaved }: { course: Course; dr
   return <Modal title="Edit Course of Fire" onClose={onClose}><form className="editor-form course-editor" onSubmit={submit}>
     <label>Name<input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
     <label>Description<textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-    <label>Google Sheet share link (optional)<input type="url" placeholder="Use default Sheet from Settings" value={form.googleSheetUrl ?? ""} onChange={e => setForm({ ...form, googleSheetUrl: e.target.value })} /></label>
     <SheetMappingEditor mapping={form.googleSheetMapping} onChange={googleSheetMapping => setForm({ ...form, googleSheetMapping })} note="Use this for the normal one-row-per-stage export layout." />
-    <CourseAttemptMappingEditor mapping={form.courseAttemptSheetMapping} entries={form.entries} drills={drills} onChange={courseAttemptSheetMapping => setForm({ ...form, courseAttemptSheetMapping })} />
+    {form.googleSheetMapping && <><label>Google Sheet share link (optional)<input type="url" placeholder="Use default Sheet from Settings" value={form.googleSheetUrl ?? ""} onChange={e => setForm({ ...form, googleSheetUrl: e.target.value })} /></label><CourseAttemptMappingEditor mapping={form.courseAttemptSheetMapping} entries={form.entries} drills={drills} onChange={courseAttemptSheetMapping => setForm({ ...form, courseAttemptSheetMapping })} /></>}
     <PassCriteriaEditor criteria={form.passCriteria} onChange={passCriteria => setForm({ ...form, passCriteria })} note="These rules evaluate the combined results of the entire course. Individual drills keep their own rules and standards." />
     <label>Add existing drill<select value={chosen} onChange={e => setChosen(e.target.value)}><option value="">Select a drill</option>{drills.filter(d => d.active).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
     <button type="button" className="secondary compact-button" onClick={add}>Add to course</button>
