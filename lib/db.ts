@@ -32,3 +32,4 @@ export async function replaceAll(data: Backup, replace: boolean){ const take=<T 
 export async function getGoogleSheetsConnection(){return (await db.settings.get("googleSheets"))?.value as GoogleSheetsConnection | undefined;}
 export async function saveGoogleSheetsConnection(connection:GoogleSheetsConnection){await db.settings.put({key:"googleSheets",value:connection});}
 export async function clearGoogleSheetsConnection(){await db.settings.delete("googleSheets");}
+export async function resetGoogleSheetRowPositions(){const runs=await db.runs.toArray();await db.runs.bulkPut(runs.map(run=>({...run,sheetRow:undefined,courseSheetRow:undefined})));}
