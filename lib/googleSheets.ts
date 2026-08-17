@@ -1,5 +1,6 @@
 import { db, getGoogleSheetsConnection, saveGoogleSheetsConnection } from "./db";
-import type { GoogleSheetField, GoogleSheetMapping, GoogleSheetsConnection, Run } from "./types";
+import type { Course, CourseAttemptSheetMapping, GoogleSheetField, GoogleSheetMapping, GoogleSheetsConnection, Run } from "./types";
+import { calculateHitFactor, evaluatePassCriteria, hasPassCriteria } from "./scoring";
 
 type TokenResponse = { access_token?: string; error?: string };
 type TokenClient = { requestAccessToken: (options?: { prompt?: string }) => void };
@@ -99,7 +100,39 @@ export async function restoreGoogleSession() {
 const runValues = (run: Run): Record<GoogleSheetField, string | number> => ({ recordedAt: new Date(run.timestamp).toLocaleString(), time: run.time, drill: run.drillNameAtTime, course: run.courseNameAtTime || "", alpha: run.alpha, charlie: run.charlie, delta: run.delta, miss: run.miss, points: run.points, hitFactor: run.hitFactor, standard: run.achievedStandardName || "", result: run.passed === undefined ? "" : run.passed ? "PASS" : "FAIL", runId: run.id });
 const columnIndex = (column: string) => [...column.toUpperCase()].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
 const columnName = (index: number) => { let value = index + 1; let output = ""; while (value) { const remainder = (value - 1) % 26; output = String.fromCharCode(65 + remainder) + output; value = Math.floor((value - 1) / 26); } return output; };
-const mappedRow = (run: Run, mapping?: GoogleSheetMapping) => { const columns = customMappingActive(mapping) ? mapping?.columns ?? {} : defaultColumns; const entries = (Object.entries(columns) as [GoogleSheetField, string][]).filter(([, column]) => /^[A-Z]{1,3}$/i.test(column)); const max = Math.max(...entries.map(([, column]) => columnIndex(column)), 0); const row = Array(max + 1).fill(""); const values = runValues(run); entries.forEach(([field, column]) => { row[columnIndex(column)] = values[field]; }); return { row, endColumn: columnName(max) }; };
+const validColumns = (columns: Partial<Record<GoogleSheetField, string>>) => (Object.entries(columns) as [GoogleSheetField, string][]).filter(([, column]) => /^[A-Z]{1,3}$/i.test(column));
+const mappedRow = (run: Run, mapping?: GoogleSheetMapping) => { const columns = customMappingActive(mapping) ? mapping?.columns ?? {} : defaultColumns; const entries = validColumns(columns); const max = Math.max(...entries.map(([, column]) => columnIndex(column)), 0); const row = Array(max + 1).fill(""); const values = runValues(run); entries.forEach(([field, column]) => { row[columnIndex(column)] = values[field]; }); return { row, endColumn: columnName(max) }; };
+
+async function prepareCourseGoogleSheet(spreadsheetUrl: string, mapping: CourseAttemptSheetMapping) {
+  const spreadsheetId = extractSpreadsheetId(spreadsheetUrl); const sheetName = mapping.sheetName.trim();
+  if (!sheetName) throw new Error("Enter the Sheet tab for the one-row course export.");
+  const metadata = await api(`spreadsheets/${spreadsheetId}?fields=sheets.properties`) as { sheets?: { properties?: { title?: string } }[] };
+  if (!metadata.sheets?.some(sheet => sheet.properties?.title === sheetName)) throw new Error(`The tab named ${sheetName} was not found in that spreadsheet.`);
+  const now = new Date().toISOString(); return { spreadsheetId, spreadsheetUrl: spreadsheetUrl.trim(), sheetName, connectedEmail: await signedInEmail(), createdAt: now, updatedAt: now } as GoogleSheetsConnection;
+}
+
+const courseAttemptValues = (course: Course, attemptId: string, runs: Run[]) => {
+  const latest = course.entries.map(entry => runs.filter(run => run.courseEntryId === entry.id).reduce<Run | undefined>((current, run) => !current || run.timestamp > current.timestamp ? run : current, undefined)); const completed = latest.filter((run): run is Run => Boolean(run));
+  const alpha = completed.reduce((sum, run) => sum + run.alpha, 0); const charlie = completed.reduce((sum, run) => sum + run.charlie, 0); const delta = completed.reduce((sum, run) => sum + run.delta, 0); const miss = completed.reduce((sum, run) => sum + run.miss, 0); const points = completed.reduce((sum, run) => sum + run.points, 0); const time = completed.reduce((sum, run) => sum + run.time, 0); const hitFactor = calculateHitFactor(points, time);
+  const criteria = { ...course.passCriteria, maxNonAlpha: course.passCriteria?.maxNonAlpha ?? (course.passCriteria?.requireAllAlpha ? undefined : course.maxTotalNonAlpha), minPoints: course.passCriteria?.minPoints ?? course.minTotalPoints }; const limit = criteria.maxNonAlpha ?? (criteria.requireAllAlpha ? 0 : undefined); const earlyFail = limit !== undefined && charlie + delta + miss > limit || criteria.maxTime !== undefined && time > criteria.maxTime; const result = completed.length === course.entries.length ? evaluatePassCriteria(criteria, { time, alpha, charlie, delta, miss, points, hitFactor })?.passed : earlyFail ? false : undefined;
+  const latestTimestamp = completed.reduce((latest, run) => !latest || run.timestamp > latest ? run.timestamp : latest, ""); return { latest, values: { recordedAt: latestTimestamp ? new Date(latestTimestamp).toLocaleString() : "", time, drill: "", course: course.name, alpha, charlie, delta, miss, points, hitFactor: hitFactor ?? "", standard: "", result: result === undefined ? "" : result ? "PASS" : "FAIL", runId: attemptId } satisfies Record<GoogleSheetField, string | number> };
+};
+
+const attemptCells = (course: Course, attemptId: string, runs: Run[], mapping: CourseAttemptSheetMapping) => {
+  const { latest, values } = courseAttemptValues(course, attemptId, runs); const cells = validColumns(mapping.columns).map(([field, column]) => ({ column, value: values[field] }));
+  latest.forEach((run, index) => { const entryId = course.entries[index]?.id; if (!entryId || !run) return; validColumns(mapping.entryColumns[entryId] ?? {}).forEach(([field, column]) => cells.push({ column, value: runValues(run)[field] })); });
+  if (!cells.length) throw new Error("Map at least one course or stage field before syncing this course.");
+  const max = Math.max(...cells.map(cell => columnIndex(cell.column))); const row = Array(max + 1).fill(""); cells.forEach(cell => { row[columnIndex(cell.column)] = cell.value; }); return { cells, row, endColumn: columnName(max) };
+};
+
+const rowFromAppend = (updatedRange: string | undefined) => { const match = updatedRange?.match(/![A-Z]+(\d+):/); return match ? Number(match[1]) : undefined; };
+async function syncCourseAttempt(course: Course, attemptId: string, mapping: CourseAttemptSheetMapping, destination: string, defaultConnection: GoogleSheetsConnection, pendingRuns: Run[]) {
+  const attemptRuns = await db.runs.filter(run => run.courseId === course.id && run.courseAttemptId === attemptId).toArray(); const connection = destination === defaultConnection.spreadsheetUrl ? await prepareCourseGoogleSheet(destination, mapping) : await prepareCourseGoogleSheet(destination, mapping); const mapped = attemptCells(course, attemptId, attemptRuns, mapping); const existingRow = attemptRuns.find(run => run.courseSheetRow)?.courseSheetRow;
+  let rowNumber = existingRow;
+  if (rowNumber) { await api(`spreadsheets/${connection.spreadsheetId}/values:batchUpdate`, { method: "POST", body: JSON.stringify({ valueInputOption: "RAW", data: mapped.cells.map(cell => ({ range: `'${connection.sheetName.replaceAll("'", "''")}'!${cell.column}${rowNumber}`, values: [[cell.value]] })) }) }); }
+  else { const response = await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${mapped.endColumn}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: [mapped.row] }) }) as { updates?: { updatedRange?: string } }; rowNumber = rowFromAppend(response.updates?.updatedRange); if (!rowNumber) throw new Error("Google Sheets did not return the new course row."); }
+  const syncedAt = new Date().toISOString(); await db.runs.bulkPut(attemptRuns.map(run => ({ ...run, courseSheetRow: rowNumber, syncStatus: "synced" as const, syncedAt }))); return pendingRuns.length;
+}
 
 export async function syncGoogleSheets() {
   const defaultConnection = await getGoogleSheetsConnection();
@@ -107,16 +140,13 @@ export async function syncGoogleSheets() {
   if (!accessToken) return { status: "needs-sign-in" as const, count: 0 };
   const pending = await db.runs.filter(run => run.syncStatus !== "synced").toArray();
   if (!pending.length) return { status: "up-to-date" as const, count: 0 };
-  const [drills, courses] = await Promise.all([db.drills.toArray(), db.courses.toArray()]);
-  const drillById = new Map(drills.map(drill => [drill.id, drill])); const courseById = new Map(courses.map(course => [course.id, course]));
-  const groups = new Map<string, { destination: string; mapping?: GoogleSheetMapping; runs: Run[] }>();
-  for (const run of pending) { const course = run.courseId ? courseById.get(run.courseId) : undefined; const drill = drillById.get(run.drillId); const destination = course?.googleSheetUrl?.trim() || drill?.googleSheetUrl?.trim() || defaultConnection.spreadsheetUrl; const mapping = course?.googleSheetMapping || drill?.googleSheetMapping || defaultConnection.mapping; const key = `${destination}|${JSON.stringify(mapping ?? {})}`; const group = groups.get(key) || { destination, mapping, runs: [] }; group.runs.push(run); groups.set(key, group); }
+  const [drills, courses] = await Promise.all([db.drills.toArray(), db.courses.toArray()]); const drillById = new Map(drills.map(drill => [drill.id, drill])); const courseById = new Map(courses.map(course => [course.id, course]));
+  const attempts = new Map<string, { course: Course; attemptId: string; mapping: CourseAttemptSheetMapping; destination: string; runs: Run[] }>(); const normalPending: Run[] = [];
+  for (const run of pending) { const course = run.courseId ? courseById.get(run.courseId) : undefined; if (course?.courseAttemptSheetMapping && run.courseAttemptId) { const destination = course.googleSheetUrl?.trim() || defaultConnection.spreadsheetUrl; const key = `${course.id}|${run.courseAttemptId}`; const attempt = attempts.get(key) || { course, attemptId: run.courseAttemptId, mapping: course.courseAttemptSheetMapping, destination, runs: [] }; attempt.runs.push(run); attempts.set(key, attempt); } else normalPending.push(run); }
   let count = 0;
-  for (const { destination, mapping, runs } of groups.values()) {
-    const connection = destination === defaultConnection.spreadsheetUrl && mapping === defaultConnection.mapping ? defaultConnection : await prepareGoogleSheet(destination, mapping);
-    const rows = runs.map(run => mappedRow(run, mapping)); const endColumn = rows.reduce((max, item) => Math.max(max, columnIndex(item.endColumn)), 0); const values = rows.map(item => item.row);
-    await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${columnName(endColumn)}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values }) });
-    const syncedAt = new Date().toISOString(); await db.runs.bulkPut(runs.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt }))); count += runs.length;
-  }
+  for (const attempt of attempts.values()) count += await syncCourseAttempt(attempt.course, attempt.attemptId, attempt.mapping, attempt.destination, defaultConnection, attempt.runs);
+  const groups = new Map<string, { destination: string; mapping?: GoogleSheetMapping; runs: Run[] }>();
+  for (const run of normalPending) { const course = run.courseId ? courseById.get(run.courseId) : undefined; const drill = drillById.get(run.drillId); const destination = course?.googleSheetUrl?.trim() || drill?.googleSheetUrl?.trim() || defaultConnection.spreadsheetUrl; const mapping = course?.googleSheetMapping || drill?.googleSheetMapping || defaultConnection.mapping; const key = `${destination}|${JSON.stringify(mapping ?? {})}`; const group = groups.get(key) || { destination, mapping, runs: [] }; group.runs.push(run); groups.set(key, group); }
+  for (const { destination, mapping, runs } of groups.values()) { const connection = destination === defaultConnection.spreadsheetUrl && mapping === defaultConnection.mapping ? defaultConnection : await prepareGoogleSheet(destination, mapping); const rows = runs.map(run => mappedRow(run, mapping)); const endColumn = rows.reduce((max, item) => Math.max(max, columnIndex(item.endColumn)), 0); await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${columnName(endColumn)}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: rows.map(item => item.row) }) }); const syncedAt = new Date().toISOString(); await db.runs.bulkPut(runs.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt }))); count += runs.length; }
   return { status: "synced" as const, count };
 }
