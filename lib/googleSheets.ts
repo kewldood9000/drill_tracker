@@ -70,9 +70,9 @@ async function ensureTrackerTab(spreadsheetId: string) {
 }
 
 async function ensureHeaders(connection: GoogleSheetsConnection) {
-  const firstRow = await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A1:L1")}`) as { values?: string[][] };
+  const firstRow = await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A1:M1")}`) as { values?: string[][] };
   if (firstRow.values?.[0]?.[0]) return;
-  await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A1:L1")}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [headers] }) });
+  await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, "A1:M1")}?valueInputOption=RAW`, { method: "PUT", body: JSON.stringify({ values: [headers] }) });
 }
 
 async function prepareGoogleSheet(spreadsheetUrl: string, mapping?: GoogleSheetMapping) {
