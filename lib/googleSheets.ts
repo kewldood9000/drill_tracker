@@ -23,21 +23,23 @@ async function loadGoogleScript() {
   if (window.google?.accounts?.oauth2) return;
   if (!scriptPromise) scriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${scriptUrl}"]`) as HTMLScriptElement | null;
-    if (existing) { existing.addEventListener("load", () => resolve(), { once: true }); existing.addEventListener("error", () => reject(new Error("Google sign-in could not load.")), { once: true }); return; }
-    const script = document.createElement("script"); script.src = scriptUrl; script.async = true; script.defer = true; script.onload = () => resolve(); script.onerror = () => reject(new Error("Google sign-in could not load.")); document.head.appendChild(script);
+    let settled = false; const finish = (error?: Error) => { if (settled) return; settled = true; window.clearTimeout(timeout); error ? reject(error) : resolve(); }; const timeout = window.setTimeout(() => finish(new Error("Google sign-in did not load. Open the app in Safari and try again.")), 12000);
+    if (existing) { const checkReady = () => { if (window.google?.accounts?.oauth2) finish(); }; existing.addEventListener("load", checkReady, { once: true }); existing.addEventListener("error", () => finish(new Error("Google sign-in could not load.")), { once: true }); checkReady(); return; }
+    const script = document.createElement("script"); script.src = scriptUrl; script.async = true; script.defer = true; script.onload = () => window.google?.accounts?.oauth2 ? finish() : finish(new Error("Google sign-in could not start.")); script.onerror = () => finish(new Error("Google sign-in could not load.")); document.head.appendChild(script);
   });
-  await scriptPromise;
+  try { await scriptPromise; } catch (error) { scriptPromise = undefined; throw error; }
 }
 
 async function requestGoogleToken(prompt: string) {
   if (!clientId) throw new Error("Google sign-in has not been configured for this site yet.");
   await loadGoogleScript();
   return await new Promise<string>((resolve, reject) => {
+    let settled = false; const finish = (token?: string, error?: Error) => { if (settled) return; settled = true; window.clearTimeout(timeout); token ? resolve(token) : reject(error ?? new Error("Google sign-in was cancelled.")); }; const timeout = window.setTimeout(() => finish(undefined, new Error("Google sign-in did not open. Open the app in Safari and try again.")), 15000);
     const tokenClient = window.google?.accounts?.oauth2?.initTokenClient({ client_id: clientId, scope: sheetsScope, callback: response => {
-      if (!response.access_token) { reject(new Error(response.error || "Google sign-in was cancelled.")); return; }
-      accessToken = response.access_token; resolve(accessToken);
+      if (!response.access_token) { finish(undefined, new Error(response.error || "Google sign-in was cancelled.")); return; }
+      accessToken = response.access_token; finish(accessToken);
     }});
-    if (!tokenClient) { reject(new Error("Google sign-in is unavailable.")); return; }
+    if (!tokenClient) { finish(undefined, new Error("Google sign-in is unavailable.")); return; }
     tokenClient.requestAccessToken({ prompt });
   });
 }
