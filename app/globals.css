@@ -40,3 +40,4 @@ body{font-size:14px}.content{padding:42px 52px 54px}.page-header{margin-bottom:3
 @media(max-width:800px){.modal-close{top:0}.modal header{margin-bottom:16px;padding:0}}
 @media(max-width:800px){.course-editor{padding-bottom:0}}
 @media(max-width:800px){.entry-card:not(:has(>.save)){padding-bottom:15px}}
+.app-version-card>div{display:grid;gap:4px;border-top:1px solid var(--line);padding-top:12px}.app-version-card small{font-size:10px;letter-spacing:1.1px;color:var(--muted)}.app-version-card b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--lime);font-size:16px;letter-spacing:.5px}
