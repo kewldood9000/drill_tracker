@@ -50,8 +50,8 @@ async function api(path: string, init?: RequestInit) {
 }
 
 const range = (sheetName: string, cells: string) => encodeURIComponent(`'${sheetName.replaceAll("'", "''")}'!${cells}`);
-const headers = ["Recorded at", "Time (sec)", "Drill", "Course", "Alpha", "Charlie", "Delta", "Miss", "Points", "Hit Factor", "Standard", "Run ID"];
-const defaultColumns: Record<GoogleSheetField, string> = { recordedAt: "A", time: "B", drill: "C", course: "D", alpha: "E", charlie: "F", delta: "G", miss: "H", points: "I", hitFactor: "J", standard: "K", result: "", runId: "L" };
+const headers = ["Recorded at", "Time (sec)", "Drill", "Course", "Alpha", "Charlie", "Delta", "Miss", "Points", "Hit Factor", "Standard", "Run ID", "Non-Alpha hits"];
+const defaultColumns: Record<GoogleSheetField, string> = { recordedAt: "A", time: "B", drill: "C", course: "D", alpha: "E", charlie: "F", delta: "G", miss: "H", nonAlpha: "M", points: "I", hitFactor: "J", standard: "K", result: "", runId: "L" };
 const customMappingActive = (mapping?: GoogleSheetMapping) => Boolean(mapping?.sheetName.trim() && Object.values(mapping.columns).some(Boolean));
 
 async function signedInEmail() {
@@ -97,7 +97,7 @@ export async function restoreGoogleSession() {
   try { await requestGoogleToken(""); return true; } catch { return false; }
 }
 
-const runValues = (run: Run): Record<GoogleSheetField, string | number> => ({ recordedAt: new Date(run.timestamp).toLocaleString(), time: run.time, drill: run.drillNameAtTime, course: run.courseNameAtTime || "", alpha: run.alpha, charlie: run.charlie, delta: run.delta, miss: run.miss, points: run.points, hitFactor: run.hitFactor, standard: run.achievedStandardName || "", result: run.passed === undefined ? "" : run.passed ? "PASS" : "FAIL", runId: run.id });
+const runValues = (run: Run): Record<GoogleSheetField, string | number> => ({ recordedAt: new Date(run.timestamp).toLocaleString(), time: run.time, drill: run.drillNameAtTime, course: run.courseNameAtTime || "", alpha: run.alpha, charlie: run.charlie, delta: run.delta, miss: run.miss, nonAlpha: run.charlie + run.delta + run.miss, points: run.points, hitFactor: run.hitFactor, standard: run.achievedStandardName || "", result: run.passed === undefined ? "" : run.passed ? "PASS" : "FAIL", runId: run.id });
 const columnIndex = (column: string) => [...column.toUpperCase()].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
 const columnName = (index: number) => { let value = index + 1; let output = ""; while (value) { const remainder = (value - 1) % 26; output = String.fromCharCode(65 + remainder) + output; value = Math.floor((value - 1) / 26); } return output; };
 const validColumns = (columns: Partial<Record<GoogleSheetField, string>>) => (Object.entries(columns) as [GoogleSheetField, string][]).filter(([, column]) => /^[A-Z]{1,3}$/i.test(column));
@@ -133,7 +133,7 @@ const courseAttemptValues = (course: Course, attemptId: string, runs: Run[]) => 
   const latest = course.entries.map(entry => runs.filter(run => run.courseEntryId === entry.id).reduce<Run | undefined>((current, run) => !current || run.timestamp > current.timestamp ? run : current, undefined)); const completed = latest.filter((run): run is Run => Boolean(run));
   const alpha = completed.reduce((sum, run) => sum + run.alpha, 0); const charlie = completed.reduce((sum, run) => sum + run.charlie, 0); const delta = completed.reduce((sum, run) => sum + run.delta, 0); const miss = completed.reduce((sum, run) => sum + run.miss, 0); const points = completed.reduce((sum, run) => sum + run.points, 0); const time = completed.reduce((sum, run) => sum + run.time, 0); const hitFactor = calculateHitFactor(points, time);
   const criteria = { ...course.passCriteria, maxNonAlpha: course.passCriteria?.maxNonAlpha ?? (course.passCriteria?.requireAllAlpha ? undefined : course.maxTotalNonAlpha), minPoints: course.passCriteria?.minPoints ?? course.minTotalPoints }; const limit = criteria.maxNonAlpha ?? (criteria.requireAllAlpha ? 0 : undefined); const earlyFail = limit !== undefined && charlie + delta + miss > limit || criteria.maxTime !== undefined && time > criteria.maxTime; const result = completed.length === course.entries.length ? evaluatePassCriteria(criteria, { time, alpha, charlie, delta, miss, points, hitFactor })?.passed : earlyFail ? false : undefined;
-  const latestTimestamp = completed.reduce((latest, run) => !latest || run.timestamp > latest ? run.timestamp : latest, ""); return { latest, values: { recordedAt: latestTimestamp ? new Date(latestTimestamp).toLocaleString() : "", time, drill: "", course: course.name, alpha, charlie, delta, miss, points, hitFactor: hitFactor ?? "", standard: "", result: result === undefined ? "" : result ? "PASS" : "FAIL", runId: attemptId } satisfies Record<GoogleSheetField, string | number> };
+  const latestTimestamp = completed.reduce((latest, run) => !latest || run.timestamp > latest ? run.timestamp : latest, ""); return { latest, values: { recordedAt: latestTimestamp ? new Date(latestTimestamp).toLocaleString() : "", time, drill: "", course: course.name, alpha, charlie, delta, miss, nonAlpha: charlie + delta + miss, points, hitFactor: hitFactor ?? "", standard: "", result: result === undefined ? "" : result ? "PASS" : "FAIL", runId: attemptId } satisfies Record<GoogleSheetField, string | number> };
 };
 
 const attemptCells = (course: Course, attemptId: string, runs: Run[], mapping: CourseAttemptSheetMapping) => {
