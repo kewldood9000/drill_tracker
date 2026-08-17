@@ -43,6 +43,7 @@ export default function Home() {
   const dismissKeyboard = () => { const active = document.activeElement; if (active instanceof HTMLElement) active.blur(); };
   const goScore = (drill: Drill, c?: Course, entry?: CourseEntry, courseAttemptId?: string) => { dismissKeyboard(); setScoreContext({ drill, course: c, entry, courseAttemptId }); setScreen("score"); };
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2600); };
+  const syncSavedRun = async () => { await refresh(); try { const result = await syncGoogleSheets(); if (result.status === "synced") notify("Run saved and synced"); else if (result.status === "needs-sign-in") notify("Run saved locally — sign in with Google to sync"); else if (result.status === "not-connected") notify("Run saved locally — connect Google Sheets to sync"); else notify("Run saved locally"); } catch (error) { notify(`Run saved locally — ${error instanceof Error ? error.message : "Google Sheets will retry later."}`); } };
   const nav = (next: Screen) => { dismissKeyboard(); const inRange = (value: Screen): value is RangeScreen => value === "range" || value === "course" || value === "score"; if (next === "range") { if (inRange(screen)) { setScreen("range"); setCourse(null); setScoreContext(null); } else setScreen(rangeReturn); return; } if (inRange(screen)) setRangeReturn(screen); setScreen(next); };
 
   return <main className="app-shell">
@@ -53,7 +54,7 @@ export default function Home() {
       {screen === "history" && <History runs={runs} drills={drills} courses={courses} onEdit={setEditingRun} />}
       {screen === "manage" && <Manage drills={drills} courses={courses} refresh={refresh} onDrill={setEditingDrill} onCourse={setEditingCourse} />}
       {screen === "course" && course && <CourseDetail course={course} drills={drills} runs={runs} activeAttemptId={activeCourseAttempt?.courseId === course.id ? activeCourseAttempt.id : undefined} onBack={() => setScreen("range")} onStartAttempt={id => setActiveCourseAttempt({ courseId: course.id, id })} onDrill={(d, e, attemptId) => goScore(d, course, e, attemptId)} />}
-      {screen === "score" && scoreContext && <ScoreEntry context={scoreContext} onBack={() => setScreen(scoreContext.course ? "course" : "range")} onSaved={async () => { await refresh(); void syncGoogleSheets().catch(() => undefined); notify("Run saved"); }} />}
+      {screen === "score" && scoreContext && <ScoreEntry context={scoreContext} onBack={() => setScreen(scoreContext.course ? "course" : "range")} onSaved={syncSavedRun} />}
       {screen === "data" && <DataSettings drills={drills} courses={courses} refresh={refresh} notify={notify} />}
     </section>
     <nav className="mobile-nav"><Nav screen={screen} onGo={nav} /></nav>
