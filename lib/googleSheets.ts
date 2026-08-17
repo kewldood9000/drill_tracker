@@ -101,7 +101,25 @@ const runValues = (run: Run): Record<GoogleSheetField, string | number> => ({ re
 const columnIndex = (column: string) => [...column.toUpperCase()].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
 const columnName = (index: number) => { let value = index + 1; let output = ""; while (value) { const remainder = (value - 1) % 26; output = String.fromCharCode(65 + remainder) + output; value = Math.floor((value - 1) / 26); } return output; };
 const validColumns = (columns: Partial<Record<GoogleSheetField, string>>) => (Object.entries(columns) as [GoogleSheetField, string][]).filter(([, column]) => /^[A-Z]{1,3}$/i.test(column));
-const mappedRow = (run: Run, mapping?: GoogleSheetMapping) => { const columns = customMappingActive(mapping) ? mapping?.columns ?? {} : defaultColumns; const entries = validColumns(columns); const max = Math.max(...entries.map(([, column]) => columnIndex(column)), 0); const row = Array(max + 1).fill(""); const values = runValues(run); entries.forEach(([field, column]) => { row[columnIndex(column)] = values[field]; }); return { row, endColumn: columnName(max) }; };
+const mappedRow = (run: Run, mapping?: GoogleSheetMapping) => { const columns = customMappingActive(mapping) ? mapping?.columns ?? {} : defaultColumns; const entries = validColumns(columns); const max = Math.max(...entries.map(([, column]) => columnIndex(column)), 0); const row = Array(max + 1).fill(""); const values = runValues(run); const cells = entries.map(([field, column]) => ({ column, value: values[field] })); cells.forEach(cell => { row[columnIndex(cell.column)] = cell.value; }); return { cells, row, endColumn: columnName(max) }; };
+const rowPlacement = (mapping?: { startRow?: number; rowSpacing?: number }) => {
+  const startRow = Math.floor(Number(mapping?.startRow));
+  if (!Number.isFinite(startRow) || startRow < 1) return undefined;
+  const rowSpacing = Math.max(1, Math.floor(Number(mapping?.rowSpacing) || 1));
+  return { startRow, rowSpacing };
+};
+async function findAvailableRow(connection: GoogleSheetsConnection, startRow: number, rowSpacing: number, endColumn: string) {
+  const lastRow = startRow + rowSpacing * 499;
+  const response = await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A${startRow}:${endColumn}${lastRow}`)}`) as { values?: string[][] };
+  for (let rowNumber = startRow; rowNumber <= lastRow; rowNumber += rowSpacing) {
+    const values = response.values?.[rowNumber - startRow];
+    if (!values?.some(value => String(value).trim())) return rowNumber;
+  }
+  throw new Error("No empty data row was found in the next 500 planned rows. Choose a later starting row or make room in the Sheet.");
+}
+async function writeCells(connection: GoogleSheetsConnection, cells: { column: string; value: string | number }[], rowNumber: number) {
+  await api(`spreadsheets/${connection.spreadsheetId}/values:batchUpdate`, { method: "POST", body: JSON.stringify({ valueInputOption: "RAW", data: cells.map(cell => ({ range: `'${connection.sheetName.replaceAll("'", "''")}'!${cell.column}${rowNumber}`, values: [[cell.value]] })) }) });
+}
 
 async function prepareCourseGoogleSheet(spreadsheetUrl: string, mapping: CourseAttemptSheetMapping) {
   const spreadsheetId = extractSpreadsheetId(spreadsheetUrl); const sheetName = mapping.sheetName.trim();
@@ -129,7 +147,8 @@ const rowFromAppend = (updatedRange: string | undefined) => { const match = upda
 async function syncCourseAttempt(course: Course, attemptId: string, mapping: CourseAttemptSheetMapping, destination: string, defaultConnection: GoogleSheetsConnection, pendingRuns: Run[]) {
   const attemptRuns = await db.runs.filter(run => run.courseId === course.id && run.courseAttemptId === attemptId).toArray(); const connection = destination === defaultConnection.spreadsheetUrl ? await prepareCourseGoogleSheet(destination, mapping) : await prepareCourseGoogleSheet(destination, mapping); const mapped = attemptCells(course, attemptId, attemptRuns, mapping); const existingRow = attemptRuns.find(run => run.courseSheetRow)?.courseSheetRow;
   let rowNumber = existingRow;
-  if (rowNumber) { await api(`spreadsheets/${connection.spreadsheetId}/values:batchUpdate`, { method: "POST", body: JSON.stringify({ valueInputOption: "RAW", data: mapped.cells.map(cell => ({ range: `'${connection.sheetName.replaceAll("'", "''")}'!${cell.column}${rowNumber}`, values: [[cell.value]] })) }) }); }
+  if (rowNumber) await writeCells(connection, mapped.cells, rowNumber);
+  else if (rowPlacement(mapping)) { const placement = rowPlacement(mapping)!; rowNumber = await findAvailableRow(connection, placement.startRow, placement.rowSpacing, mapped.endColumn); await writeCells(connection, mapped.cells, rowNumber); }
   else { const response = await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${mapped.endColumn}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: [mapped.row] }) }) as { updates?: { updatedRange?: string } }; rowNumber = rowFromAppend(response.updates?.updatedRange); if (!rowNumber) throw new Error("Google Sheets did not return the new course row."); }
   const syncedAt = new Date().toISOString(); await db.runs.bulkPut(attemptRuns.map(run => ({ ...run, courseSheetRow: rowNumber, syncStatus: "synced" as const, syncedAt }))); return pendingRuns.length;
 }
@@ -147,6 +166,6 @@ export async function syncGoogleSheets() {
   for (const attempt of attempts.values()) count += await syncCourseAttempt(attempt.course, attempt.attemptId, attempt.mapping, attempt.destination, defaultConnection, attempt.runs);
   const groups = new Map<string, { destination: string; mapping?: GoogleSheetMapping; runs: Run[] }>();
   for (const run of normalPending) { const course = run.courseId ? courseById.get(run.courseId) : undefined; const drill = drillById.get(run.drillId); const destination = course?.googleSheetUrl?.trim() || drill?.googleSheetUrl?.trim() || defaultConnection.spreadsheetUrl; const mapping = course?.googleSheetMapping || drill?.googleSheetMapping || defaultConnection.mapping; const key = `${destination}|${JSON.stringify(mapping ?? {})}`; const group = groups.get(key) || { destination, mapping, runs: [] }; group.runs.push(run); groups.set(key, group); }
-  for (const { destination, mapping, runs } of groups.values()) { const connection = destination === defaultConnection.spreadsheetUrl && mapping === defaultConnection.mapping ? defaultConnection : await prepareGoogleSheet(destination, mapping); const rows = runs.map(run => mappedRow(run, mapping)); const endColumn = rows.reduce((max, item) => Math.max(max, columnIndex(item.endColumn)), 0); await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${columnName(endColumn)}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: rows.map(item => item.row) }) }); const syncedAt = new Date().toISOString(); await db.runs.bulkPut(runs.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt }))); count += runs.length; }
+  for (const { destination, mapping, runs } of groups.values()) { const connection = destination === defaultConnection.spreadsheetUrl && mapping === defaultConnection.mapping ? defaultConnection : await prepareGoogleSheet(destination, mapping); const rows = runs.map(run => mappedRow(run, mapping)); const placement = rowPlacement(mapping); if (placement) { const syncedAt = new Date().toISOString(); for (const run of runs) { const mapped = mappedRow(run, mapping); const rowNumber = run.sheetRow ?? await findAvailableRow(connection, placement.startRow, placement.rowSpacing, mapped.endColumn); await writeCells(connection, mapped.cells, rowNumber); await db.runs.put({ ...run, sheetRow: rowNumber, syncStatus: "synced", syncedAt }); } } else { const endColumn = rows.reduce((max, item) => Math.max(max, columnIndex(item.endColumn)), 0); await api(`spreadsheets/${connection.spreadsheetId}/values/${range(connection.sheetName, `A:${columnName(endColumn)}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: "POST", body: JSON.stringify({ values: rows.map(item => item.row) }) }); const syncedAt = new Date().toISOString(); await db.runs.bulkPut(runs.map(run => ({ ...run, syncStatus: "synced" as const, syncedAt }))); } count += runs.length; }
   return { status: "synced" as const, count };
 }
