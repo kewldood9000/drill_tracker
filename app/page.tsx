@@ -71,8 +71,19 @@ export default function Home() {
 
 function Brand() { return <div className="brand"><span className="brand-mark">O</span><span><b>DRILL</b><em>TRACKER</em></span></div>; }
 function Nav({ screen, onGo, mobile = false }: { screen: Screen; onGo: (s: Screen) => void; mobile?: boolean }) {
-  const links: [Screen, string, string][] = mobile ? [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["zeroing", "⌾", "Zeroing"], ["history", "o", "History"], ["manage", "=", "Manage"], ["data", "*", "More"]] : [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["zeroing", "⌾", "Zeroing"], ["manage", "=", "Manage"], ["data", "*", "More"]];
-  return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key || key === "range" && (screen === "course" || screen === "score") ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i>{icon}</i>{label}</button>)}</>;
+  const links: [Screen, NavIconName, string][] = mobile ? [["range", "range", "Range"], ["quick", "quick", "Quick HF"], ["zeroing", "zeroing", "Zeroing"], ["history", "history", "History"], ["manage", "manage", "Manage"], ["data", "more", "More"]] : [["range", "range", "Range"], ["quick", "quick", "Quick HF"], ["history", "history", "History"], ["zeroing", "zeroing", "Zeroing"], ["manage", "manage", "Manage"], ["data", "more", "More"]];
+  return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key || key === "range" && (screen === "course" || screen === "score") ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i aria-hidden="true"><NavIcon name={icon} /></i>{label}</button>)}</>;
+}
+
+type NavIconName = "range" | "quick" | "zeroing" | "history" | "manage" | "more";
+function NavIcon({ name }: { name: NavIconName }) {
+  if (name === "zeroing") return <span className="nav-zero-glyph">⌾</span>;
+  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (name === "range") return <svg {...common}><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>;
+  if (name === "quick") return <svg {...common}><circle cx="12" cy="13" r="7" /><path d="M12 13V9m0 4 3 2M9 3h6m-3 0v3m6 2 1.5-1.5" /></svg>;
+  if (name === "history") return <svg {...common}><path d="M4 12a8 8 0 1 0 2.3-5.6L4 8.7" /><path d="M4 4v4.7h4.7M12 8v4l2.5 1.5" /></svg>;
+  if (name === "manage") return <svg {...common}><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="1.7" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1.7" fill="currentColor" stroke="none" /><circle cx="11" cy="18" r="1.7" fill="currentColor" stroke="none" /></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M12 2.5v2.2m0 14.6v2.2M2.5 12h2.2m14.6 0h2.2M5.3 5.3l1.6 1.6m10.2 10.2 1.6 1.6m0-13.4-1.6 1.6M6.9 17.1l-1.6 1.6" /></svg>;
 }
 
 function Range({ drills, courses, runs, query, setQuery, onDrill, onCourse }: { drills: Drill[]; courses: Course[]; runs: Run[]; query: string; setQuery: (v: string) => void; onDrill: (d: Drill) => void; onCourse: (c: Course) => void }) {
