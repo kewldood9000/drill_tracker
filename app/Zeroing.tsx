@@ -48,7 +48,7 @@ export default function Zeroing() {
   const transferToZeroing = () => {
     if (!reticleResult) return;
     setCorrection(current => ({ ...current, distance: String(n(reticle.distance) ?? 100), distanceUnit: reticle.distanceUnit, verticalMagnitude: reticleResult.vertical.provided ? fixed(reticleResult.vertical.inches) : "", verticalUnit: "inches", verticalDirection: reticleResult.vertical.direction as VerticalDirection, horizontalMagnitude: reticleResult.horizontal.provided ? fixed(reticleResult.horizontal.inches) : "", horizontalUnit: "inches", horizontalDirection: reticleResult.horizontal.direction as HorizontalDirection }));
-    setZeroResult(null); setCorrectionError(""); correctionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setZeroResult(null); setCorrectionError(""); setActiveTool("correction"); window.requestAnimationFrame(() => correctionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const applyQuickOptic = (label: string) => { const optic = QUICK_OPTIC_VALUES.find(item => item.label === label); if (!optic) return; setSelectedOptic(label); setC("opticUnit", optic.unit); setC("elevationPerClick", optic.value); setC("windagePerClick", optic.value); };
