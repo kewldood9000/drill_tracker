@@ -61,7 +61,7 @@ export default function Home() {
       {screen === "data" && <DataSettings drills={drills} courses={courses} refresh={refresh} notify={notify} />}
       {screen === "zeroing" && <Zeroing />}
     </section>
-    <nav className="mobile-nav"><Nav screen={screen} onGo={nav} /></nav>
+    <nav className="mobile-nav"><Nav screen={screen} onGo={nav} mobile /></nav>
     {editingDrill && <DrillEditor drill={editingDrill} onClose={() => setEditingDrill(null)} onSaved={async () => { setEditingDrill(null); await refresh(); notify("Drill saved"); }} />}
     {editingCourse && <CourseEditor course={editingCourse} drills={drills} onClose={() => setEditingCourse(null)} onSaved={async (message = "Course saved") => { setEditingCourse(null); await refresh(); notify(message); }} />}
     {editingRun && <SavedRunEditor run={editingRun} courses={courses} drills={drills} onClose={() => setEditingRun(null)} onFinished={async message => { setEditingRun(null); await refresh(); notify(message); }} />}
@@ -70,8 +70,8 @@ export default function Home() {
 }
 
 function Brand() { return <div className="brand"><span className="brand-mark">O</span><span><b>DRILL</b><em>TRACKER</em></span></div>; }
-function Nav({ screen, onGo }: { screen: Screen; onGo: (s: Screen) => void }) {
-  const links: [Screen, string, string][] = [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["zeroing", "⌾", "Zeroing"], ["manage", "=", "Manage"], ["data", "*", "More"]];
+function Nav({ screen, onGo, mobile = false }: { screen: Screen; onGo: (s: Screen) => void; mobile?: boolean }) {
+  const links: [Screen, string, string][] = mobile ? [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["zeroing", "⌾", "Zeroing"], ["history", "o", "History"], ["manage", "=", "Manage"], ["data", "*", "More"]] : [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["zeroing", "⌾", "Zeroing"], ["manage", "=", "Manage"], ["data", "*", "More"]];
   return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key || key === "range" && (screen === "course" || screen === "score") ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i>{icon}</i>{label}</button>)}</>;
 }
 
