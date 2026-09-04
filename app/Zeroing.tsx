@@ -5,6 +5,7 @@ import { calculateReticleOffset, calculateZeroClicks, type AngularUnit, type Dis
 
 type CorrectionForm = { distance: string; distanceUnit: DistanceUnit; opticUnit: AngularUnit; elevationPerClick: string; windagePerClick: string; verticalMagnitude: string; verticalUnit: OffsetUnit; verticalDirection: VerticalDirection; horizontalMagnitude: string; horizontalUnit: OffsetUnit; horizontalDirection: HorizontalDirection };
 type ReticleForm = { distance: string; distanceUnit: DistanceUnit; reticleUnit: AngularUnit; horizontalMagnitude: string; horizontalDirection: HorizontalDirection; verticalMagnitude: string; verticalDirection: VerticalDirection; reticleType: ReticleType; calibrationMagnification: string; currentMagnification: string };
+type Tool = "correction" | "impact";
 
 const initialCorrection: CorrectionForm = { distance: "100", distanceUnit: "yards", opticUnit: "MOA", elevationPerClick: "0.5", windagePerClick: "0.5", verticalMagnitude: "4", verticalUnit: "inches", verticalDirection: "LOW", horizontalMagnitude: "3", horizontalUnit: "inches", horizontalDirection: "LEFT" };
 const initialReticle: ReticleForm = { distance: "100", distanceUnit: "yards", reticleUnit: "MIL", horizontalMagnitude: "1.5", horizontalDirection: "LEFT", verticalMagnitude: "0.8", verticalDirection: "LOW", reticleType: "FFP", calibrationMagnification: "10", currentMagnification: "5" };
@@ -19,6 +20,7 @@ export default function Zeroing() {
   const [reticleResult, setReticleResult] = useState<ReticleOffsetResult | null>(null);
   const [correctionError, setCorrectionError] = useState("");
   const [reticleError, setReticleError] = useState("");
+  const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [profiles, setProfiles] = useState<OpticProfile[]>([]);
   const [profileName, setProfileName] = useState("");
   const correctionRef = useRef<HTMLElement>(null);
@@ -66,10 +68,10 @@ export default function Zeroing() {
 
   return <>
     <PageHeader eyebrow="ZEROING / OPTIC TOOLS" title="Put the rounds on zero" note="Fast, range-ready corrections for optic turrets and reticle measurements." />
-    <div className="zeroing-tabs" aria-label="Zeroing tools"><a href="#zeroing-correction">Correction</a><a href="#reticle-offset">Reticle offset</a></div>
+    <div className="zeroing-tabs" aria-label="Zeroing tools"><button type="button" className={activeTool === "correction" ? "selected" : ""} aria-pressed={activeTool === "correction"} onClick={() => setActiveTool("correction")}>Click Calculation</button><button type="button" className={activeTool === "impact" ? "selected" : ""} aria-pressed={activeTool === "impact"} onClick={() => setActiveTool("impact")}>Impact Calculator</button></div>
     <div className="zeroing-grid">
-      <section className="zeroing-card" id="zeroing-correction" ref={correctionRef}>
-        <div className="tool-heading"><div><span className="tool-kicker">01 / TURRET CLICKS</span><h2>Zeroing Correction</h2><p>Turn the measured impact into the optic adjustment required.</p></div><span className="tool-icon">⌾</span></div>
+      {activeTool === "correction" && <section className="zeroing-card" id="click-calculation" ref={correctionRef}>
+        <div className="tool-heading"><div><span className="tool-kicker">01 / TURRET CLICKS</span><h2>Click Calculation</h2><p>Turn the measured impact into the optic adjustment required.</p></div><span className="tool-icon">⌾</span></div>
         <div className="zeroing-fields">
           <div className="field-group"><label>Distance to target</label><div className="input-pair"><input aria-label="Distance to target" type="number" min="0.01" step="any" inputMode="decimal" value={correction.distance} onChange={event => setC("distance", event.target.value)} /><select aria-label="Distance unit" value={correction.distanceUnit} onChange={event => setC("distanceUnit", event.target.value as DistanceUnit)}><option value="yards">yards</option><option value="meters">meters</option></select></div></div>
           <div className="field-group"><label>Optic adjustment</label><div className="adjustment-grid"><div className="unit-toggle" role="group" aria-label="Optic measurement system"><button type="button" className={correction.opticUnit === "MOA" ? "selected" : ""} onClick={() => setC("opticUnit", "MOA")}>MOA</button><button type="button" className={correction.opticUnit === "MIL" ? "selected" : ""} onClick={() => setC("opticUnit", "MIL")}>MRAD / MIL</button></div><div className="click-inputs"><label>Elevation / click<input type="number" min="0.0001" step="any" inputMode="decimal" value={correction.elevationPerClick} onChange={event => setC("elevationPerClick", event.target.value)} /></label><label>Windage / click<input type="number" min="0.0001" step="any" inputMode="decimal" value={correction.windagePerClick} onChange={event => setC("windagePerClick", event.target.value)} /></label></div><div className="quick-values"><span>Quick values</span>{clickOptions.map(value => <button type="button" key={value} onClick={() => { setC("elevationPerClick", value); setC("windagePerClick", value); }}>{value} {unitLabel(correction.opticUnit)}</button>)}</div></div></div>
@@ -78,10 +80,10 @@ export default function Zeroing() {
         <ProfileBar profiles={profiles} profileName={profileName} setProfileName={setProfileName} saveProfile={saveProfile} loadProfile={loadProfile} deleteProfile={deleteProfile} />
         {correctionError && <p className="zeroing-error" role="alert">{correctionError}</p>}<button className="primary calculate-button" type="button" onClick={calculateCorrection}>Calculate correction</button>
         {zeroResult && <CorrectionResults result={zeroResult} distance={n(correction.distance) ?? 0} distanceUnit={correction.distanceUnit} opticUnit={correction.opticUnit} elevationPerClick={n(correction.elevationPerClick) ?? 0} windagePerClick={n(correction.windagePerClick) ?? 0} />}
-      </section>
+      </section>}
 
-      <section className="zeroing-card" id="reticle-offset">
-        <div className="tool-heading"><div><span className="tool-kicker">02 / IMPACT MEASUREMENT</span><h2>Reticle Offset</h2><p>Convert a reticle reading into physical point-of-aim to point-of-impact distance.</p></div><span className="tool-icon">⊕</span></div>
+      {activeTool === "impact" && <section className="zeroing-card" id="impact-calculator" ref={correctionRef}>
+        <div className="tool-heading"><div><span className="tool-kicker">02 / IMPACT MEASUREMENT</span><h2>Impact Calculator</h2><p>Convert a reticle reading into physical point-of-aim to point-of-impact distance.</p></div><span className="tool-icon">⊕</span></div>
         <div className="zeroing-fields">
           <div className="field-group"><label>Distance to target</label><div className="input-pair"><input aria-label="Reticle distance" type="number" min="0.01" step="any" inputMode="decimal" value={reticle.distance} onChange={event => setR("distance", event.target.value)} /><select aria-label="Reticle distance unit" value={reticle.distanceUnit} onChange={event => setR("distanceUnit", event.target.value as DistanceUnit)}><option value="yards">yards</option><option value="meters">meters</option></select></div></div>
           <div className="field-group"><label>Reticle measurement</label><div className="unit-toggle" role="group" aria-label="Reticle measurement unit"><button type="button" className={reticle.reticleUnit === "MIL" ? "selected" : ""} onClick={() => setR("reticleUnit", "MIL")}>MIL</button><button type="button" className={reticle.reticleUnit === "MOA" ? "selected" : ""} onClick={() => setR("reticleUnit", "MOA")}>MOA</button></div></div>
@@ -92,7 +94,7 @@ export default function Zeroing() {
         {reticle.reticleType === "FFP" && <p className="info-note">FFP measurements remain valid at any magnification.</p>}{reticle.reticleType === "SFP" && <p className="info-note">SFP readings are scaled relative to the calibration magnification.</p>}
         {reticleError && <p className="zeroing-error" role="alert">{reticleError}</p>}<button className="primary calculate-button" type="button" onClick={calculateReticle}>Calculate physical offset</button>
         {reticleResult && <ReticleResults result={reticleResult} distance={n(reticle.distance) ?? 0} distanceUnit={reticle.distanceUnit} reticleUnit={reticle.reticleUnit} reticleType={reticle.reticleType} onTransfer={transferToZeroing} />}
-      </section>
+      </section>}
     </div>
     <details className="quick-reference"><summary>Quick Reference</summary><div><p><b>At 100 yards</b><br />1 MOA ≈ 1.047"<br />0.5 MOA ≈ 0.524"<br />1 MIL = 3.6"<br />0.1 MIL = 0.36"</p><p><b>At 100 meters</b><br />1 MIL = 10 cm<br />0.1 MIL = 1 cm</p></div></details>
   </>;
