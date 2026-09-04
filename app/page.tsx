@@ -1,12 +1,13 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { clearGoogleSheetsConnection, db, ensureSeed, getGoogleSheetsConnection, replaceAll, resetGoogleSheetRowPositions, snapshot } from "@/lib/db";
+import { clearGoogleSheetsConnection, db, ensureSeed, getGoogleSheetsConnection, replaceAll, resetGoogleSheetRowPositions, saveGoogleSheetsConnection, snapshot } from "@/lib/db";
 import { connectGoogleSheet, googleSheetsConfigured, restoreGoogleSession, syncGoogleSheets } from "@/lib/googleSheets";
 import { calculateAlpha, calculateHitFactor, calculatePoints, determineStandard, evaluatePassCriteria, hasPassCriteria, SCORE_VALUES, standardMetric, validHitCounts } from "@/lib/scoring";
 import type { Course, CourseEntry, Drill, GoogleSheetField, GoogleSheetMapping, GoogleSheetsConnection, PassCriteria, Run, Standard } from "@/lib/types";
+import Zeroing from "./Zeroing";
 
-type Screen = "range" | "quick" | "history" | "manage" | "course" | "score" | "data";
+type Screen = "range" | "quick" | "history" | "manage" | "zeroing" | "course" | "score" | "data";
 type RangeScreen = "range" | "course" | "score";
 type ScoreContext = { drill: Drill; course?: Course; entry?: CourseEntry; courseAttemptId?: string };
 const uid = () => crypto.randomUUID();
@@ -58,6 +59,7 @@ export default function Home() {
       {screen === "course" && course && <CourseDetail course={course} drills={drills} runs={runs} activeAttemptId={activeCourseAttempt?.courseId === course.id ? activeCourseAttempt.id : undefined} onBack={() => setScreen("range")} onStartAttempt={id => setActiveCourseAttempt({ courseId: course.id, id })} onDrill={(d, e, attemptId) => goScore(d, course, e, attemptId)} />}
       {screen === "score" && scoreContext && <ScoreEntry context={scoreContext} onBack={() => setScreen(scoreContext.course ? "course" : "range")} onSaved={syncSavedRun} />}
       {screen === "data" && <DataSettings drills={drills} courses={courses} refresh={refresh} notify={notify} />}
+      {screen === "zeroing" && <Zeroing />}
     </section>
     <nav className="mobile-nav"><Nav screen={screen} onGo={nav} /></nav>
     {editingDrill && <DrillEditor drill={editingDrill} onClose={() => setEditingDrill(null)} onSaved={async () => { setEditingDrill(null); await refresh(); notify("Drill saved"); }} />}
@@ -69,7 +71,7 @@ export default function Home() {
 
 function Brand() { return <div className="brand"><span className="brand-mark">O</span><span><b>DRILL</b><em>TRACKER</em></span></div>; }
 function Nav({ screen, onGo }: { screen: Screen; onGo: (s: Screen) => void }) {
-  const links: [Screen, string, string][] = [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["manage", "=", "Manage"], ["data", "*", "More"]];
+  const links: [Screen, string, string][] = [["range", "[]", "Range"], ["quick", "~", "Quick HF"], ["history", "o", "History"], ["zeroing", "⌾", "Zeroing"], ["manage", "=", "Manage"], ["data", "*", "More"]];
   return <>{links.map(([key, icon, label]) => <button key={key} className={screen === key || key === "range" && (screen === "course" || screen === "score") ? "nav-link active" : "nav-link"} onClick={() => onGo(key)}><i>{icon}</i>{label}</button>)}</>;
 }
 
