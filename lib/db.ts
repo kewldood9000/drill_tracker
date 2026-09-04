@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { AppSetting, Backup, Course, Drill, GoogleSheetsConnection, OpticProfile, Run } from "./types";
+import type { AppSetting, Backup, Course, Drill, GoogleSheetsConnection, Run } from "./types";
 class DrillTrackerDB extends Dexie { drills!: EntityTable<Drill,"id">; courses!: EntityTable<Course,"id">; runs!: EntityTable<Run,"id">; settings!: EntityTable<AppSetting,"key">; constructor(){ super("drill-tracker"); this.version(1).stores({drills:"id,name,active,favorite",courses:"id,name,active,favorite",runs:"id,drillId,courseId,timestamp"}); this.version(2).stores({drills:"id,name,active,favorite",courses:"id,name,active,favorite",runs:"id,drillId,courseId,timestamp,syncStatus",settings:"key"}); } }
 export const db = new DrillTrackerDB();
 const now = () => new Date().toISOString(); const id=(v:string)=>`seed-${v}`;
@@ -33,5 +33,3 @@ export async function getGoogleSheetsConnection(){return (await db.settings.get(
 export async function saveGoogleSheetsConnection(connection:GoogleSheetsConnection){await db.settings.put({key:"googleSheets",value:connection});}
 export async function clearGoogleSheetsConnection(){await db.settings.delete("googleSheets");}
 export async function resetGoogleSheetRowPositions(){const runs=await db.runs.toArray();await db.runs.bulkPut(runs.map(run=>({...run,sheetRow:undefined,courseSheetRow:undefined})));}
-export async function getOpticProfiles(): Promise<OpticProfile[]> { const value = (await db.settings.get("zeroingProfiles"))?.value; return Array.isArray(value) ? value as OpticProfile[] : []; }
-export async function saveOpticProfiles(profiles: OpticProfile[]): Promise<void> { await db.settings.put({ key: "zeroingProfiles", value: profiles }); }
